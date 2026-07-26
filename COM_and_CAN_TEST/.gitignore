@@ -1,0 +1,39 @@
+# ============================================
+# Qt + MinGW 项目 .gitignore
+# 只保留源代码，忽略所有编译产物和临时文件
+# ============================================
+
+# ---- 编译输出 ----
+release/
+debug/
+build/
+*.exe
+*.o
+*.a
+*.lib
+*.dll
+
+# ---- Qt 自动生成文件 (由 qmake/uic/moc 产生) ----
+Makefile
+Makefile.Debug
+Makefile.Release
+.qmake.stash
+ui_mainwindow.h
+moc_*.cpp
+moc_predefs.h
+
+# ---- Qt Creator 项目配置 (每台机器不同) ----
+*.pro.user
+*.pro.user.*
+*.pro.user.*.*
+
+# ---- IDE / 编辑器 ----
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ---- 系统文件 ----
+Thumbs.db
+.DS_Store

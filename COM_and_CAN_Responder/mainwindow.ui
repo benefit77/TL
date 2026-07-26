@@ -1,0 +1,252 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>700</width>
+    <height>600</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>COM &amp; CAN Responder</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QVBoxLayout" name="verticalLayout_4">
+    <!-- ============ 串口区域 ============ -->
+    <item>
+     <widget class="QGroupBox" name="groupBoxCom">
+      <property name="title">
+       <string>🔌 串口响应器 (COM Responder)</string>
+      </property>
+      <layout class="QHBoxLayout" name="horizontalLayout_2">
+       <item>
+        <widget class="QComboBox" name="comSelector"/>
+       </item>
+       <item>
+        <widget class="QPushButton" name="btnScanCom">
+         <property name="text">
+          <string>扫描</string>
+         </property>
+         <property name="fixedWidth">
+          <number>60</number>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="btnOpenCom">
+         <property name="text">
+          <string>打开串口</string>
+         </property>
+         <property name="styleSheet">
+          <string>QPushButton { background-color: #4CAF50; color: white; font-weight: bold; }</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="btnCloseCom">
+         <property name="text">
+          <string>关闭</string>
+         </property>
+         <property name="styleSheet">
+          <string>QPushButton { background-color: #f44336; color: white; font-weight: bold; }</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="comStatusLabel">
+         <property name="text">
+          <string>🔴 未连接</string>
+         </property>
+         <property name="styleSheet">
+          <string>font-weight: bold; font-size: 13px; padding: 4px;</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+    <!-- ============ CAN 区域 ============ -->
+    <item>
+     <widget class="QGroupBox" name="groupBoxCan">
+      <property name="title">
+       <string>🚌 CAN 响应器 (CAN Responder)</string>
+      </property>
+      <layout class="QHBoxLayout" name="horizontalLayout_3">
+       <item>
+        <widget class="QComboBox" name="canInterfaceSelector"/>
+       </item>
+       <item>
+        <widget class="QPushButton" name="btnScanCan">
+         <property name="text">
+          <string>扫描</string>
+         </property>
+         <property name="fixedWidth">
+          <number>60</number>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="btnOpenCan">
+         <property name="text">
+          <string>打开 CAN</string>
+         </property>
+         <property name="styleSheet">
+          <string>QPushButton { background-color: #2196F3; color: white; font-weight: bold; }</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="btnCloseCan">
+         <property name="text">
+          <string>关闭</string>
+         </property>
+         <property name="styleSheet">
+          <string>QPushButton { background-color: #f44336; color: white; font-weight: bold; }</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="canStatusLabel">
+         <property name="text">
+          <string>🔴 未连接</string>
+         </property>
+         <property name="styleSheet">
+          <string>font-weight: bold; font-size: 13px; padding: 4px;</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QCheckBox" name="checkBoxAutoRespond">
+         <property name="text">
+          <string>自动响应</string>
+         </property>
+         <property name="checked">
+          <bool>true</bool>
+         </property>
+         <property name="styleSheet">
+          <string>font-weight: bold;</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+    <!-- ============ 网络区域 ============ -->
+    <item>
+     <widget class="QGroupBox" name="groupBoxNet">
+      <property name="title">
+       <string>🌐 网络响应器 (NET Responder / UDP Ping-Pong)</string>
+      </property>
+      <layout class="QHBoxLayout" name="horizontalLayout_4">
+       <item>
+        <widget class="QLabel" name="labelNetPort">
+         <property name="text">
+          <string>监听端口:</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLineEdit" name="netPortInput">
+         <property name="fixedWidth">
+          <number>80</number>
+         </property>
+         <property name="placeholderText">
+          <string>12346</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="btnStartNet">
+         <property name="text">
+          <string>开始监听</string>
+         </property>
+         <property name="styleSheet">
+          <string>QPushButton { background-color: #4CAF50; color: white; font-weight: bold; }</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="btnStopNet">
+         <property name="text">
+          <string>停止</string>
+         </property>
+         <property name="styleSheet">
+          <string>QPushButton { background-color: #f44336; color: white; font-weight: bold; }</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="netStatusLabel">
+         <property name="text">
+          <string>🔴 未启动</string>
+         </property>
+         <property name="styleSheet">
+          <string>font-weight: bold; font-size: 13px; padding: 4px;</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+    <!-- ============ 日志区域 ============ -->
+    <item>
+     <widget class="QGroupBox" name="groupBoxLog">
+      <property name="title">
+       <string>📋 通信日志</string>
+      </property>
+      <layout class="QVBoxLayout" name="verticalLayout_3">
+       <item>
+        <widget class="QListWidget" name="logList">
+         <property name="styleSheet">
+          <string>
+           QListWidget {
+               background-color: #1e1e1e;
+               color: #d4d4d4;
+               font-family: "Consolas", "Courier New", monospace;
+               font-size: 12px;
+               border: 1px solid #333;
+           }
+           QListWidget::item {
+               padding: 2px 4px;
+               border-bottom: 1px solid #2a2a2a;
+           }
+          </string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="horizontalLayout">
+         <item>
+          <widget class="QPushButton" name="btnClearLog">
+           <property name="text">
+            <string>清除日志</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <spacer name="horizontalSpacer">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>40</width>
+             <height>20</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+        </layout>
+       </item>
+      </layout>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
