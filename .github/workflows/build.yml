@@ -1,0 +1,88 @@
+name: Build
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-20.04
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up QEMU for ARM64
+        if: matrix.arch == 'arm64'
+        uses: docker/setup-qemu-action@v2
+
+      - name: Build both projects (${{ matrix.arch }})
+        shell: bash
+        run: |
+          # 选择 Docker 镜像
+          if [ "${{ matrix.arch }}" = "arm64" ]; then
+            DOCKER_IMAGE="arm64v8/ubuntu:18.04"
+          else
+            DOCKER_IMAGE="ubuntu:18.04"
+          fi
+
+          docker run --rm \
+            -v "${{ github.workspace }}:/workspace" \
+            -w /workspace \
+            "$DOCKER_IMAGE" \
+            bash -c '
+              set -e
+              echo "=== 更新软件源 ==="
+              export DEBIAN_FRONTEND=noninteractive
+              apt-get update -qq
+
+              echo "=== 安装编译工具和 Qt5 依赖 ==="
+              apt-get install -y -qq \
+                build-essential \
+                qt5-default \
+                qtbase5-dev-tools \
+                libqt5serialport5-dev \
+                libusb-1.0-0-dev \
+                pkg-config
+
+              echo "=== 构建 COM_and_CAN_Responder ==="
+              mkdir -p build/responder
+              cd build/responder
+              qmake ../../COM_and_CAN_Responder/COM_and_CAN_Responder.pro
+              make -j$(nproc)
+              echo "✅ Responder 构建完成"
+
+              echo "=== 构建 COM_and_CAN_TEST ==="
+              cd /workspace
+              mkdir -p build/test
+              cd build/test
+              qmake ../../COM_and_CAN_TEST/COM_and_RJ45_TEST.pro
+              make -j$(nproc)
+              echo "✅ TEST 构建完成"
+
+              echo "=== 所有项目构建成功 ==="
+            '
+
+      - name: Copy binaries to workspace
+        shell: bash
+        run: |
+          mkdir -p dist/${{ matrix.arch }}
+          # Responder 二进制
+          cp -v build/responder/COM_and_CAN_Responder dist/${{ matrix.arch }}/ 2>/dev/null || \
+            cp -v build/responder/COM_and_CAN_Responder.exe dist/${{ matrix.arch }}/ 2>/dev/null || true
+          # TEST 二进制
+          cp -v build/test/COM_and_RJ45_TEST dist/${{ matrix.arch }}/ 2>/dev/null || \
+            cp -v build/test/COM_and_RJ45_TEST.exe dist/${{ matrix.arch }}/ 2>/dev/null || true
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: binaries-${{ matrix.arch }}
+          path: dist/${{ matrix.arch }}/
