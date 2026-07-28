@@ -4,6 +4,9 @@
 SerialResponder::SerialResponder(QObject *parent)
     : QObject(parent)
 {
+    m_retryTimer = new QTimer(this);
+    m_retryTimer->setInterval(RETRY_INTERVAL_MS);
+    connect(m_retryTimer, &QTimer::timeout, this, &SerialResponder::onRetryReady);
 }
 
 SerialResponder::~SerialResponder()
@@ -48,7 +51,10 @@ bool SerialResponder::openPort(const QString &portName, int baudRate)
     emit logMessage(QString("✅ 串口 %1 已打开, 波特率 %2").arg(portName).arg(baudRate));
     emit statusChanged(QString("🟢 已连接 %1").arg(portName));
 
-    // 启动后立即发送 "ready"
+    // 启动重发定时器 — 持续发送 "ready" 直到收到 "YES"
+    m_retryTimer->start();
+
+    // 立即发送第一次 "ready"
     sendReady();
 
     return true;
@@ -56,6 +62,8 @@ bool SerialResponder::openPort(const QString &portName, int baudRate)
 
 void SerialResponder::closePort()
 {
+    stopTimers();
+
     if (m_serial) {
         if (m_serial->isOpen()) {
             m_serial->clear();
@@ -78,6 +86,17 @@ QString SerialResponder::portName() const
     if (m_serial && m_serial->isOpen())
         return m_serial->portName();
     return QString();
+}
+
+void SerialResponder::stopTimers()
+{
+    if (m_retryTimer) m_retryTimer->stop();
+}
+
+void SerialResponder::onRetryReady()
+{
+    // 定时器触发 — 重发 "ready"（只有尚未完成握手时才重试）
+    sendReady();
 }
 
 void SerialResponder::sendReady()
@@ -115,6 +134,12 @@ void SerialResponder::sendOk3()
     emit logMessage("→ 发送: OK3");
     emit statusChanged("🟢 握手完成！");
     emit handshakeCompleted();
+
+    // 重置状态，重新开始发送 "ready"，支持多轮测试
+    m_recvBuf.clear();
+    m_readySent = false;
+    m_retryTimer->start();
+    sendReady();
 }
 
 void SerialResponder::onReadyRead()
@@ -134,6 +159,7 @@ void SerialResponder::onReadyRead()
 
     // 检查是否收到 "YES"（测试端在收到 ready 后发送 YES）
     if (m_recvBuf.contains("YES")) {
+        stopTimers();  // 收到 YES，停止重试和超时定时器
         m_recvBuf.clear();
         emit logMessage("✓ 识别到 YES，准备回复 OK1");
         sendOk1();

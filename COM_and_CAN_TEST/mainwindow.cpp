@@ -1169,9 +1169,9 @@ void MainWindow::initDynamicNetTests()
     // ====== 整体垂直布局 ======
     QVBoxLayout *mainLayout = new QVBoxLayout(netGroup);
     mainLayout->setContentsMargins(10, 8, 10, 8);
-    mainLayout->setSpacing(8);
+    mainLayout->setSpacing(6);
 
-        // ====== 配置行：端口 | 扫描网卡（目标IP已下放到每行）======
+    // ====== 配置行：端口 | 扫描网卡 ======
     QHBoxLayout *cfgRow = new QHBoxLayout();
     cfgRow->setSpacing(8);
 
@@ -1216,31 +1216,45 @@ void MainWindow::initDynamicNetTests()
         return;
     }
 
-    // 表头
+    // 列宽常量：与数据行严格对应
+    const int COL_TEST    = 90;   // 连通测试按钮
+    const int COL_BW      = 50;   // 带宽测试按钮
+    const int COL_IP      = 150;  // IP 地址
+    const int COL_TARGET  = 120;  // 目标IP
+    const int COL_RESULT  = 130;  // 连通结果
+    const int COL_BW_RES  = 140;  // 带宽结果
+
+    // ====== 表头（使用 QGridLayout 确保与数据行列对齐）======
+    // 先用一个水平布局装表头，每列宽度与数据行完全一致
     QHBoxLayout *headerRow = new QHBoxLayout();
     headerRow->setSpacing(8);
 
     QLabel *hdrIface = new QLabel("网口");
-    hdrIface->setFixedWidth(90);
+    hdrIface->setFixedWidth(COL_TEST);
     hdrIface->setStyleSheet("font-weight: bold; font-size: 12px; color: #757575;");
 
+    QLabel *hdrBwBtn = new QLabel("带宽");
+    hdrBwBtn->setFixedWidth(COL_BW);
+    hdrBwBtn->setStyleSheet("font-weight: bold; font-size: 12px; color: #757575;");
+
     QLabel *hdrIp = new QLabel("IP 地址");
-    hdrIp->setFixedWidth(120);
+    hdrIp->setFixedWidth(COL_IP);
     hdrIp->setStyleSheet("font-weight: bold; font-size: 12px; color: #757575;");
 
     QLabel *hdrTarget = new QLabel("目标IP");
-    hdrTarget->setFixedWidth(120);
+    hdrTarget->setFixedWidth(COL_TARGET);
     hdrTarget->setStyleSheet("font-weight: bold; font-size: 12px; color: #757575;");
 
     QLabel *hdrResult = new QLabel("连通测试");
-    hdrResult->setFixedWidth(130);
+    hdrResult->setFixedWidth(COL_RESULT);
     hdrResult->setStyleSheet("font-weight: bold; font-size: 12px; color: #757575;");
 
     QLabel *hdrBw = new QLabel("带宽测试");
-    hdrBw->setFixedWidth(140);
+    hdrBw->setFixedWidth(COL_BW_RES);
     hdrBw->setStyleSheet("font-weight: bold; font-size: 12px; color: #757575;");
 
     headerRow->addWidget(hdrIface);
+    headerRow->addWidget(hdrBwBtn);
     headerRow->addWidget(hdrIp);
     headerRow->addWidget(hdrTarget);
     headerRow->addWidget(hdrResult);
@@ -1267,10 +1281,9 @@ void MainWindow::initDynamicNetTests()
         QHBoxLayout *row = new QHBoxLayout();
         row->setSpacing(8);
 
-        // 测试按钮
         // 连通测试按钮
         QPushButton *btnTest = new QPushButton(QString("%1").arg(friendlyName));
-        btnTest->setFixedSize(90, 32);
+        btnTest->setFixedSize(COL_TEST, 32);
         btnTest->setCursor(Qt::PointingHandCursor);
         btnTest->setToolTip(QString("系统接口: %1").arg(iface));
         btnTest->setStyleSheet(
@@ -1282,7 +1295,7 @@ void MainWindow::initDynamicNetTests()
 
         // 带宽测试按钮
         QPushButton *btnBwTest = new QPushButton("带宽");
-        btnBwTest->setFixedSize(50, 32);
+        btnBwTest->setFixedSize(COL_BW, 32);
         btnBwTest->setCursor(Qt::PointingHandCursor);
         btnBwTest->setToolTip("发送大流量 UDP 包测试网卡带宽");
         btnBwTest->setStyleSheet(
@@ -1292,20 +1305,22 @@ void MainWindow::initDynamicNetTests()
             "QPushButton:hover { background-color: #BBDEFB; }"
             "QPushButton:disabled { background-color: #F5F5F5; color: #BDBDBD; }");
 
-        // IP 标签
-        QLabel *lblIpAddr = new QLabel(ip);
-        lblIpAddr->setFixedWidth(120);
-        lblIpAddr->setStyleSheet("color: #1565C0; font-weight: bold; font-size: 13px; padding: 4px;");
+        // IP 地址（用只读 QLineEdit 代替 QLabel，避免文字截断）
+        QLineEdit *lblIpAddr = new QLineEdit(ip);
+        lblIpAddr->setReadOnly(true);
+        lblIpAddr->setFixedWidth(COL_IP);
+        lblIpAddr->setStyleSheet(
+            "QLineEdit { color: #1565C0; font-weight: bold; font-size: 13px;"
+            "  background: transparent; border: none; padding: 4px; }");
 
-        // 每行独立的目标IP输入框 - 自动建议同网段 .100
+        // 每行独立的目标IP输入框
         QLineEdit *targetIpInput = new QLineEdit();
-        targetIpInput->setFixedSize(120, 28);
+        targetIpInput->setFixedSize(COL_TARGET, 28);
         targetIpInput->setStyleSheet(
             "QLineEdit { background-color: #FFF8E1; color: #333;"
             "  border: 1px solid #FFE082; border-radius: 4px;"
             "  font-size: 13px; padding: 2px 6px; }");
         {
-            // 自动建议目标IP：取本机IP前三段 + ".100"
             QString suggested;
             QStringList parts = ip.split('.');
             if (parts.size() == 4 && ip != "无IP") {
@@ -1318,7 +1333,7 @@ void MainWindow::initDynamicNetTests()
         // 连通测试结果框
         QLineEdit *display = new QLineEdit();
         display->setReadOnly(true);
-        display->setFixedSize(130, 30);
+        display->setFixedSize(COL_RESULT, 30);
         display->setStyleSheet(defaultStyle);
         display->setAlignment(Qt::AlignCenter);
         display->setText("-");
@@ -1326,7 +1341,7 @@ void MainWindow::initDynamicNetTests()
         // 带宽测试结果框
         QLineEdit *bwDisplay = new QLineEdit();
         bwDisplay->setReadOnly(true);
-        bwDisplay->setFixedSize(140, 30);
+        bwDisplay->setFixedSize(COL_BW_RES, 30);
         bwDisplay->setStyleSheet(defaultStyle);
         bwDisplay->setAlignment(Qt::AlignCenter);
         bwDisplay->setText("-");

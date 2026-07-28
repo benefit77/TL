@@ -35,13 +35,19 @@ signals:
 private slots:
     void onReadyRead();
     void onErrorOccurred(QSerialPort::SerialPortError error);
+    void onRetryReady();
 
 private:
     QSerialPort *m_serial = nullptr;
     QByteArray m_recvBuf;
     bool m_readySent = false;
 
+    QTimer *m_retryTimer = nullptr;       ///< 重发 "ready" 的定时器
+
+    static constexpr int RETRY_INTERVAL_MS = 100;     ///< "ready" 重发间隔
+
     void sendReady();
+    void stopTimers();
     void sendOk1();
     void sendOk3();
 };
