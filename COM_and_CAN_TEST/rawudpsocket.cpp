@@ -268,3 +268,24 @@ void RawUdpSocket::setError(const QString &err)
     m_error = err;
     qDebug() << "RawUdpSocket[" << m_deviceName << "] Error:" << err;
 }
+
+bool RawUdpSocket::waitForReadyRead(int timeoutMs)
+{
+    if (m_fd < 0) return false;
+
+#ifdef Q_OS_WIN
+    fd_set fds;
+    FD_ZERO(&fds);
+    FD_SET(m_fd, &fds);
+    struct timeval tv;
+    tv.tv_sec = timeoutMs / 1000;
+    tv.tv_usec = (timeoutMs % 1000) * 1000;
+    return select(m_fd + 1, &fds, nullptr, nullptr, &tv) > 0;
+#else
+    struct pollfd pfd;
+    pfd.fd = m_fd;
+    pfd.events = POLLIN;
+    int ret = poll(&pfd, 1, timeoutMs);
+    return ret > 0;
+#endif
+}

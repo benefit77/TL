@@ -31,6 +31,7 @@ signals:
     void statusChanged(const QString &status);
     void logMessage(const QString &msg);
     void handshakeCompleted();
+    void portDisconnected();              ///< 串口因异常自动断开时发出（通知 UI 复位）
 
 private slots:
     void onReadyRead();

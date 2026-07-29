@@ -138,8 +138,13 @@ void SerialResponder::sendOk3()
     // 重置状态，重新开始发送 "ready"，支持多轮测试
     m_recvBuf.clear();
     m_readySent = false;
-    m_retryTimer->start();
-    sendReady();
+
+    // 延迟重启定时器，避免测试端关闭串口后立即写入导致 ResourceError
+    QTimer::singleShot(500, this, [this]() {
+        if (!m_serial || !m_serial->isOpen()) return;
+        m_retryTimer->start();
+        sendReady();
+    });
 }
 
 void SerialResponder::onReadyRead()
@@ -191,5 +196,6 @@ void SerialResponder::onErrorOccurred(QSerialPort::SerialPortError error)
     if (error == QSerialPort::ResourceError || error == QSerialPort::DeviceNotFoundError) {
         // 串口被拔出或断开，自动清理
         closePort();
+        emit portDisconnected();   // 通知 UI 复位按钮状态，防止界面卡死
     }
 }

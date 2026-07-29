@@ -24,6 +24,8 @@ MainWindow::MainWindow(QWidget *parent)
             this, &MainWindow::onSerialLog);
     connect(m_serialResp, &SerialResponder::handshakeCompleted,
             this, &MainWindow::onSerialHandshakeDone);
+    connect(m_serialResp, &SerialResponder::portDisconnected,
+            this, &MainWindow::onSerialPortDisconnected);
 
     // 连接 CAN 响应器信号
     connect(m_canResp, &CanResponder::statusChanged,
@@ -297,6 +299,17 @@ void MainWindow::onSerialLog(const QString &msg)
 void MainWindow::onSerialHandshakeDone()
 {
     appendLog("🎉 串口握手协议全部完成！");
+}
+
+void MainWindow::onSerialPortDisconnected()
+{
+    // 串口异常断开（如对端关闭），复位 UI 按钮防止界面卡死
+    ui->btnOpenCom->setEnabled(true);
+    ui->btnCloseCom->setEnabled(false);
+    ui->comSelector->setEnabled(true);
+    ui->btnScanCom->setEnabled(true);
+    ui->comStatusLabel->setText("🔴 已断开");
+    appendLog("⚠️ 串口连接异常断开，界面已复位");
 }
 
 void MainWindow::onCanStatus(const QString &status)

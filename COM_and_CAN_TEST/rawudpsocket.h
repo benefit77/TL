@@ -23,6 +23,9 @@ public:
     qint64 readDatagram(char *data, qint64 maxSize, QHostAddress *host = nullptr, quint16 *port = nullptr);
     qint64 pendingDatagramSize() const;
 
+    // 在指定毫秒内等待数据可读（替代 processEvents 忙等，精确且低延迟）
+    bool waitForReadyRead(int timeoutMs);
+
     int socketDescriptor() const { return m_fd; }
     QString errorString() const { return m_error; }
 

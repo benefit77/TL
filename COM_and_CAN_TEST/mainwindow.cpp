@@ -1436,7 +1436,11 @@ void MainWindow::performNetHandshake(const QString &ifaceName, const QString &sr
                 return;
             }
 
-            if (udpSocket.hasPendingDatagrams())
+            // 使用 poll 精确等待，不依赖 processEvents 的不可控延时
+            int remain = ROUND_TIMEOUT_MS - static_cast<int>(roundTimer.elapsed());
+            if (remain <= 0) break;
+
+            if (udpSocket.waitForReadyRead(qMin(remain, 5)))
             {
                 char buf[64];
                 QHostAddress peerAddr;
@@ -1466,7 +1470,6 @@ void MainWindow::performNetHandshake(const QString &ifaceName, const QString &sr
                     }
                 }
             }
-            QCoreApplication::processEvents(QEventLoop::AllEvents, 5);
         }
 
         if (!replyReceived) {
@@ -1563,7 +1566,10 @@ void MainWindow::performNetBwTest(const QString &ifaceName, const QString &targe
     QElapsedTimer waitTimer;
     waitTimer.start();
     while (waitTimer.elapsed() < REPORT_TIMEOUT_MS) {
-        if (udpSocket.hasPendingDatagrams()) {
+        int remain = REPORT_TIMEOUT_MS - static_cast<int>(waitTimer.elapsed());
+        if (remain <= 0) break;
+
+        if (udpSocket.waitForReadyRead(qMin(remain, 10))) {
             char buf[64];
             QHostAddress peerAddr;
             quint16 peerPort;
@@ -1580,7 +1586,6 @@ void MainWindow::performNetBwTest(const QString &ifaceName, const QString &targe
                 }
             }
         }
-        QCoreApplication::processEvents(QEventLoop::AllEvents, 5);
     }
 
     udpSocket.close();
@@ -1595,26 +1600,18 @@ void MainWindow::performNetBwTest(const QString &ifaceName, const QString &targe
         mbps = (totalBytes * 8.0) / (burstEndMs / 1000.0) / 1000000.0;
     }
 
-    int lossRate = (totalPackets > 0) ? (lostPackets * 100 / totalPackets) : 0;
-
     QString result;
     if (gotReport) {
         if (mbps >= 1000.0)
-            result = QString("⇄ %1 Gbps").arg(mbps / 1000.0, 0, 'f', 2);
+            result = QString("%1 Gbps").arg(mbps / 1000.0, 0, 'f', 2);
         else
-            result = QString("⇄ %1 Mbps").arg(mbps, 0, 'f', 1);
-
-        result += QString(" 收%1/%2包").arg(recvPackets).arg(totalPackets);
-        if (lostPackets > 0)
-            result += QString(" 丢%1(%2%)").arg(lostPackets).arg(lossRate);
-        result += QString(" %3s").arg(durMs / 1000.0, 0, 'f', 1);
+            result = QString("%1 Mbps").arg(mbps, 0, 'f', 1);
     } else {
         // 目标端未回复 BWRPT → 显示发送速率（单向）
         if (mbps >= 1000.0)
             result = QString("↑%1 Gbps").arg(mbps / 1000.0, 0, 'f', 2);
         else
             result = QString("↑%1 Mbps").arg(mbps, 0, 'f', 1);
-        result += QString(" (%1包) ⚠️ 无报告").arg(totalPackets);
     }
 
     bwDisplay->setStyleSheet(
