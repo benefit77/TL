@@ -46,7 +46,9 @@ private slots:
     // 响应器信号
     void onSerialStatus(const QString &status);
     void onSerialLog(const QString &msg);
-    void onSerialHandshakeDone();    void onSerialPortDisconnected();   // 串口异常断开时复位界面    void onCanStatus(const QString &status);
+    void onSerialHandshakeDone();
+    void onSerialPortDisconnected();   // 串口异常断开时复位界面
+    void onCanStatus(const QString &status);
     void onCanLog(const QString &msg);
     void onCanHandshakeDone(int rounds);
 
