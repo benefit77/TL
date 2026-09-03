@@ -623,7 +623,7 @@ QStringList MainWindow::getAvailableCanInterfaces()
     QDir netDir("/sys/class/net");
     if (netDir.exists()) {
         QStringList filters;
-        filters << "can*";
+        filters << "can*" << "vcan*";
         canList = netDir.entryList(filters, QDir::Dirs | QDir::NoDotAndDotDot);
         canList.sort();
     }
