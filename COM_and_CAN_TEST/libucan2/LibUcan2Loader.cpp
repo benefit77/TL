@@ -14,13 +14,20 @@ bool LibUcan2Loader::load()
 {
     if (s_loaded) return true;
 
+    // 库文件名：Windows 用 libucan2.dll，其它平台用 libucan2.so
+#ifdef Q_OS_WIN
+    const QString libName = QStringLiteral("libucan2.dll");
+#else
+    const QString libName = QStringLiteral("libucan2.so");
+#endif
+
     // 搜索路径：AppImage 目录 → app 目录 → libucan2/ 子目录
-    QString libPath = findLibFile("libucan2.so", "libucan2");
+    QString libPath = findLibFile(libName, "libucan2");
     if (libPath.isEmpty())
-        libPath = findLibFile("libucan2.so");
+        libPath = findLibFile(libName);
 
     if (libPath.isEmpty()) {
-        qDebug() << "[LibUcan2] 未找到 libucan2.so";
+        qDebug() << "[LibUcan2] 未找到" << libName;
         return false;
     }
 
