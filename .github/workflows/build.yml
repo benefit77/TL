@@ -99,9 +99,19 @@ jobs:
           # 而跳过，报 “Unable to find the platform plugin.”。不传该参数时按
           # MatchDebugOrRelease 处理，只匹配发布版文件名（qwindows.dll），不会带上
           # qwindowsd.dll 等调试文件。
-          windeployqt --version
+          echo "qmake      : $(command -v qmake)"
+          echo "Qt plugins : $(qmake -query QT_INSTALL_PLUGINS)"
+          ls "$(qmake -query QT_INSTALL_PLUGINS)/platforms" \
+            || echo "::warning::未找到 platforms 插件目录"
+
           for exe in dist/*.exe; do
-            windeployqt --no-translations --no-opengl-sw "$exe"
+            if ! output=$(windeployqt --no-translations --no-opengl-sw "$exe" 2>&1); then
+              printf '%s\n' "$output"
+              # 把失败原因写进注解，方便在 Actions 页面上直接看到
+              echo "::error::windeployqt $(basename "$exe") 失败: $(printf '%s' "$output" | tail -n 6 | sed ':a;N;$!ba;s/\n/%0A/g')"
+              exit 1
+            fi
+            printf '%s\n' "$output"
           done
           ls -la dist
           ls -la dist/platforms || { echo "::error::Qt 平台插件 qwindows.dll 未部署"; exit 1; }
