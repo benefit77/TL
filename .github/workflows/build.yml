@@ -93,9 +93,18 @@ jobs:
         shell: bash
         run: |
           set -e
+          # 不要给 windeployqt 传 --release/--debug：MinGW 构建下它无法可靠区分
+          # debug/release（只能看 PE 的 IMAGE_FILE_DEBUG_STRIPPED 标志），一旦强制
+          # --release，就会把 Qt 自带的 plugins/platforms/qwindows.dll 误判成 debug
+          # 而跳过，报 “Unable to find the platform plugin.”。不传该参数时按
+          # MatchDebugOrRelease 处理，只匹配发布版文件名（qwindows.dll），不会带上
+          # qwindowsd.dll 等调试文件。
+          windeployqt --version
           for exe in dist/*.exe; do
-            windeployqt --release --no-translations --no-opengl-sw "$exe"
+            windeployqt --no-translations --no-opengl-sw "$exe"
           done
+          ls -la dist
+          ls -la dist/platforms || { echo "::error::Qt 平台插件 qwindows.dll 未部署"; exit 1; }
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
