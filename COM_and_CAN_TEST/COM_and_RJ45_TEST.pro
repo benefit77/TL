@@ -39,7 +39,12 @@ HEADERS += \
 FORMS += \
     mainwindow.ui
 
-RC_ICONS = logo.ico
+win32 {
+    # logo.ico is optional because it is not tracked in this repository.
+    exists($$PWD/logo.ico) {
+        RC_ICONS = logo.ico
+    }
+}
 
 # libusb（同星 CAN 在 Linux 上需要）
 unix:!android {

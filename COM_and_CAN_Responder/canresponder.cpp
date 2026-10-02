@@ -138,7 +138,7 @@ void CanResponder::onPollTimer()
         emit logMessage(QString("← CAN 收到: ID=0x%1 DLC=%2 Data=%3")
                             .arg(canId, 3, 16, QChar('0'))
                             .arg(rxFrame.can_dlc)
-                            .arg(frameData.toHex(' ').toUpper()));
+                            .arg(QString::fromLatin1(frameData.toHex(' ').toUpper())));
 
         // 自动响应
         if (m_autoRespond && canId == REQUEST_ID) {
@@ -192,7 +192,7 @@ bool CanResponder::sendReply(uint32_t id, const uint8_t *data, int len)
     emit logMessage(QString("→ CAN 发送: ID=0x%1 DLC=%2 Data=%3")
                         .arg(id, 3, 16, QChar('0'))
                         .arg(txFrame.can_dlc)
-                        .arg(replyData.toHex(' ').toUpper()));
+                        .arg(QString::fromLatin1(replyData.toHex(' ').toUpper())));
     return true;
 #else
     Q_UNUSED(id);

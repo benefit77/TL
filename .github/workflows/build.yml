@@ -1,4 +1,4 @@
-name: Build
+name: Build Windows and Linux
 
 on:
   push:
@@ -9,80 +9,97 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-20.04
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        arch: [amd64, arm64]
+        include:
+          - name: linux-x64
+            os: ubuntu-22.04
+            make: make
+          - name: windows-x64-mingw
+            os: windows-2022
+            make: mingw32-make
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Set up QEMU for ARM64
-        if: matrix.arch == 'arm64'
-        uses: docker/setup-qemu-action@v2
-
-      - name: Build both projects (${{ matrix.arch }})
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
         shell: bash
         run: |
-          # 选择 Docker 镜像
-          if [ "${{ matrix.arch }}" = "arm64" ]; then
-            DOCKER_IMAGE="arm64v8/ubuntu:18.04"
-          else
-            DOCKER_IMAGE="ubuntu:18.04"
-          fi
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libusb-1.0-0-dev
 
-          docker run --rm \
-            -v "${{ github.workspace }}:/workspace" \
-            -w /workspace \
-            "$DOCKER_IMAGE" \
-            bash -c '
-              set -e
-              echo "=== 更新软件源 ==="
-              export DEBIAN_FRONTEND=noninteractive
-              apt-get update -qq
+      - name: Install Qt (Linux)
+        if: runner.os == 'Linux'
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '5.15.2'
+          arch: gcc_64
+          cache: true
 
-              echo "=== 安装编译工具和 Qt5 依赖 ==="
-              apt-get install -y -qq \
-                build-essential \
-                qt5-default \
-                qtbase5-dev-tools \
-                libqt5serialport5-dev \
-                libusb-1.0-0-dev \
-                pkg-config
+      - name: Install Qt (Windows)
+        if: runner.os == 'Windows'
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '5.15.2'
+          arch: win64_mingw81
+          tools: 'tools_mingw,qt.tools.win64_mingw810'
+          cache: true
 
-              echo "=== 构建 COM_and_CAN_Responder ==="
-              mkdir -p build/responder
-              cd build/responder
-              qmake ../../COM_and_CAN_Responder/COM_and_CAN_Responder.pro
-              make -j$(nproc)
-              echo "✅ Responder 构建完成"
-
-              echo "=== 构建 COM_and_CAN_TEST ==="
-              cd /workspace
-              mkdir -p build/test
-              cd build/test
-              qmake ../../COM_and_CAN_TEST/COM_and_RJ45_TEST.pro
-              make -j$(nproc)
-              echo "✅ TEST 构建完成"
-
-              echo "=== 所有项目构建成功 ==="
-            '
-
-      - name: Copy binaries to workspace
+      - name: Verify compiler
         shell: bash
         run: |
-          mkdir -p dist/${{ matrix.arch }}
-          # Responder 二进制
-          cp -v build/responder/COM_and_CAN_Responder dist/${{ matrix.arch }}/ 2>/dev/null || \
-            cp -v build/responder/COM_and_CAN_Responder.exe dist/${{ matrix.arch }}/ 2>/dev/null || true
-          # TEST 二进制
-          cp -v build/test/COM_and_RJ45_TEST dist/${{ matrix.arch }}/ 2>/dev/null || \
-            cp -v build/test/COM_and_RJ45_TEST.exe dist/${{ matrix.arch }}/ 2>/dev/null || true
+          qmake -v
+          ${{ matrix.make }} --version
+
+      - name: Build projects
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          QMAKE_ARGS="CONFIG+=release CONFIG-=debug CONFIG-=debug_and_release"
+
+          echo "=== Build COM_and_CAN_Responder ==="
+          mkdir -p build/responder
+          cd build/responder
+          qmake ../../COM_and_CAN_Responder/COM_and_CAN_Responder.pro $QMAKE_ARGS
+          ${{ matrix.make }} -j2
+          cd ../..
+
+          echo "=== Build COM_and_CAN_TEST ==="
+          mkdir -p build/test
+          cd build/test
+          qmake ../../COM_and_CAN_TEST/COM_and_RJ45_TEST.pro $QMAKE_ARGS
+          ${{ matrix.make }} -j2
+          cd ../..
+
+      - name: Collect binaries
+        shell: bash
+        run: |
+          set -e
+          mkdir -p dist
+          find build -type f \
+            \( -name 'COM_and_CAN_Responder' -o -name 'COM_and_CAN_Responder.exe' \
+               -o -name 'COM_and_RJ45_TEST' -o -name 'COM_and_RJ45_TEST.exe' \) \
+            -exec cp -v {} dist/ \;
+          ls -la dist
+
+      - name: Deploy Qt runtime (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          set -e
+          for exe in dist/*.exe; do
+            windeployqt --release --no-translations --no-opengl-sw "$exe"
+          done
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: binaries-${{ matrix.arch }}
-          path: dist/${{ matrix.arch }}/
+          name: ${{ matrix.name }}
+          path: dist/
+          if-no-files-found: error
