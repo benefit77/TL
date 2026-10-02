@@ -1,4 +1,58 @@
+#if defined(_WIN32) && !defined(_WIN32_WINNT)
+#define _WIN32_WINNT 0x0600
+#endif
+
 #include "LibUcan2Loader.h"
+
+#include <QDir>
+#include <QFileInfo>
+
+#ifdef Q_OS_WIN
+#include <windows.h>
+#include <string>
+
+namespace {
+std::wstring g_previousDllDirectory;
+bool g_hasPreviousDllDirectory = false;
+bool g_dllDirectoryChanged = false;
+
+// QLibrary uses LoadLibrary internally. Its dependency search path does not
+// include the directory containing the DLL, so temporarily add it here.
+void setDllDirectoryForLibrary(const QString &libPath)
+{
+    if (g_dllDirectoryChanged)
+        return;
+
+    const DWORD required = GetDllDirectoryW(0, nullptr);
+    if (required > 0) {
+        std::wstring buffer(required + 1, L'\0');
+        const DWORD length = GetDllDirectoryW(required + 1, &buffer[0]);
+        if (length > 0 && length <= required) {
+            buffer.resize(length);
+            g_previousDllDirectory.swap(buffer);
+            g_hasPreviousDllDirectory = true;
+        }
+    }
+
+    const QString nativeDir =
+        QDir::toNativeSeparators(QFileInfo(libPath).absolutePath());
+    g_dllDirectoryChanged =
+        SetDllDirectoryW(reinterpret_cast<const wchar_t *>(nativeDir.utf16())) != 0;
+}
+
+void restoreDllDirectory()
+{
+    if (!g_dllDirectoryChanged)
+        return;
+
+    SetDllDirectoryW(g_hasPreviousDllDirectory ? g_previousDllDirectory.c_str()
+                                               : nullptr);
+    g_previousDllDirectory.clear();
+    g_hasPreviousDllDirectory = false;
+    g_dllDirectoryChanged = false;
+}
+} // namespace
+#endif
 
 QLibrary *LibUcan2Loader::s_lib = nullptr;
 bool LibUcan2Loader::s_loaded = false;
@@ -31,11 +85,18 @@ bool LibUcan2Loader::load()
         return false;
     }
 
+#ifdef Q_OS_WIN
+    setDllDirectoryForLibrary(libPath);
+#endif
+
     s_lib = new QLibrary(libPath);
     if (!s_lib->load()) {
         qDebug() << "[LibUcan2] 加载失败:" << s_lib->errorString();
         delete s_lib;
         s_lib = nullptr;
+#ifdef Q_OS_WIN
+        restoreDllDirectory();
+#endif
         return false;
     }
 
@@ -71,6 +132,10 @@ void LibUcan2Loader::unload()
     fp_EndisChannel = nullptr;
     fp_SendFrame = nullptr;
     fp_RecvFrame = nullptr;
+
+#ifdef Q_OS_WIN
+    restoreDllDirectory();
+#endif
 }
 
 bool LibUcan2Loader::Init() { return fp_Init ? fp_Init() : false; }
