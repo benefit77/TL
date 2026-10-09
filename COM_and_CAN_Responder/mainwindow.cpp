@@ -15,7 +15,6 @@ MainWindow::MainWindow(QWidget *parent)
     // 创建响应器对象
     m_serialResp = new SerialResponder(this);
     m_canResp = new CanResponder(this);
-    m_netResp = new NetResponder(this);
 
     // 连接串口响应器信号
     connect(m_serialResp, &SerialResponder::statusChanged,
@@ -35,14 +34,6 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_canResp, &CanResponder::handshakeCompleted,
             this, &MainWindow::onCanHandshakeDone);
 
-    // 连接网络响应器信号
-    connect(m_netResp, &NetResponder::statusChanged,
-            this, &MainWindow::onNetStatus);
-    connect(m_netResp, &NetResponder::logMessage,
-            this, &MainWindow::onNetLog);
-    connect(m_netResp, &NetResponder::handshakeCompleted,
-            this, &MainWindow::onNetHandshakeDone);
-
     // 初始化端口列表
     initSerialPorts();
     initCanInterfaces();
@@ -50,13 +41,10 @@ MainWindow::MainWindow(QWidget *parent)
     // 初始状态
     ui->btnCloseCom->setEnabled(false);
     ui->btnCloseCan->setEnabled(false);
-    ui->btnStopNet->setEnabled(false);
     ui->comStatusLabel->setText("🔴 未连接");
     ui->canStatusLabel->setText("🔴 未连接");
-    ui->netStatusLabel->setText("🔴 未启动");
-    ui->netPortInput->setText("12346");
 
-    appendLog("🚀 COM & CAN & NET Responder 启动");
+    appendLog("🚀 COM & CAN Responder 启动");
     appendLog("等待选择串口或 CAN 接口后开始响应...");
 }
 
@@ -64,7 +52,6 @@ MainWindow::~MainWindow()
 {
     if (m_serialResp) m_serialResp->closePort();
     if (m_canResp) m_canResp->closeInterface();
-    if (m_netResp) m_netResp->stopListen();
     delete ui;
 }
 
@@ -218,56 +205,12 @@ void MainWindow::on_canInterfaceSelector_currentIndexChanged(int index)
     Q_UNUSED(index);
 }
 
-// ==================== 网络部分 ====================
-
-void MainWindow::on_btnStartNet_clicked()
-{
-    quint16 port = ui->netPortInput->text().toUShort();
-    if (port == 0) {
-        appendLog("⚠️ 请输入有效的端口号");
-        return;
-    }
-
-    if (m_netResp->startListen(port)) {
-        ui->btnStartNet->setEnabled(false);
-        ui->btnStopNet->setEnabled(true);
-        ui->netPortInput->setEnabled(false);
-    }
-}
-
-void MainWindow::on_btnStopNet_clicked()
-{
-    m_netResp->stopListen();
-    ui->btnStartNet->setEnabled(true);
-    ui->btnStopNet->setEnabled(false);
-    ui->netPortInput->setEnabled(true);
-    ui->netStatusLabel->setText("🔴 未启动");
-    appendLog("🔌 网络监听已关闭");
-}
-
 // ==================== 自动响应开关 ====================
 
 void MainWindow::on_checkBoxAutoRespond_toggled(bool checked)
 {
     m_canResp->setAutoRespond(checked);
     appendLog(checked ? "✅ CAN 自动响应已开启" : "⏸️ CAN 自动响应已关闭");
-}
-
-// ==================== 网络信号处理 ====================
-
-void MainWindow::onNetStatus(const QString &status)
-{
-    ui->netStatusLabel->setText(status);
-}
-
-void MainWindow::onNetLog(const QString &msg)
-{
-    appendLog("[网络] " + msg);
-}
-
-void MainWindow::onNetHandshakeDone(int rounds)
-{
-    appendLog(QString("🎉 网络 %1 轮握手全部完成！").arg(rounds));
 }
 
 // ==================== 日志 ====================

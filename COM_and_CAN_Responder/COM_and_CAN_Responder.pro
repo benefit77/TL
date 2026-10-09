@@ -1,4 +1,4 @@
-QT       += core gui serialport network
+QT       += core gui serialport
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
@@ -10,14 +10,12 @@ SOURCES += \
     main.cpp \
     mainwindow.cpp \
     serialresponder.cpp \
-    canresponder.cpp \
-    netresponder.cpp
+    canresponder.cpp
 
 HEADERS += \
     mainwindow.h \
     serialresponder.h \
-    canresponder.h \
-    netresponder.h
+    canresponder.h
 
 FORMS += \
     mainwindow.ui

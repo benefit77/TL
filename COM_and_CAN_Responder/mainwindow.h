@@ -9,7 +9,6 @@
 
 #include "serialresponder.h"
 #include "canresponder.h"
-#include "netresponder.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -36,10 +35,6 @@ private slots:
     void on_btnScanCan_clicked();
     void on_canInterfaceSelector_currentIndexChanged(int index);
 
-    // 网络相关
-    void on_btnStartNet_clicked();
-    void on_btnStopNet_clicked();
-
     // 日志
     void on_btnClearLog_clicked();
 
@@ -52,11 +47,6 @@ private slots:
     void onCanLog(const QString &msg);
     void onCanHandshakeDone(int rounds);
 
-    // 网络响应器信号
-    void onNetStatus(const QString &status);
-    void onNetLog(const QString &msg);
-    void onNetHandshakeDone(int rounds);
-
     // 自动回复全部
     void on_checkBoxAutoRespond_toggled(bool checked);
 
@@ -64,7 +54,6 @@ private:
     Ui::MainWindow *ui;
     SerialResponder *m_serialResp = nullptr;
     CanResponder *m_canResp = nullptr;
-    NetResponder *m_netResp = nullptr;
 
     void initSerialPorts();
     void initCanInterfaces();
