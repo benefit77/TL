@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>680</width>
-    <height>563</height>
+    <width>714</width>
+    <height>591</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -713,24 +713,7 @@
     <layout class="QGridLayout" name="gridLayout"/>
    </widget>
   </widget>
-  <widget class="QMenuBar" name="menubar">
-   <property name="geometry">
-    <rect>
-     <x>0</x>
-     <y>0</y>
-     <width>680</width>
-     <height>21</height>
-    </rect>
-   </property>
-   <widget class="QMenu" name="menu">
-    <property name="title">
-     <string>测试</string>
-    </property>
-   </widget>
-   <addaction name="menu"/>
-  </widget>
-  <widget class="QStatusBar" name="statusbar"/>
- </widget>
+</widget>
  <resources/>
  <connections/>
 </ui>
