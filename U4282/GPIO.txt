@@ -1,0 +1,18 @@
+拓朗TCA9554，信步TCA9554A
+
+地址 0x40
+比持位
+DI1—— 7
+DI2—— 6
+DI3—— 5
+DI4—— 4
+
+DO1—— 3
+DO2—— 2
+DO3—— 1
+DO4—— 0
+
+格式：
+1、TCA_GPIO_RW.exe -r 0x40 GPI 7     //查询DI
+2、TCA_GPIO_RW.exe -r 0x40 GPO 3   //查询DO
+3、TCA_GPIO_RW.exe -w 0x40 GPO 3 1   //设置DO为高电平

@@ -1,0 +1,13 @@
+# Qt build output
+*.o
+*.obj
+moc_*.cpp
+moc_*.h
+moc_predefs.h
+Makefile
+.qmake.stash
+*.pro.user
+*.pro.user.*
+TCA9554_GPIO_GUI
+debug/
+release/
