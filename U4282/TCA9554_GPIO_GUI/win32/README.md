@@ -10,7 +10,8 @@
 
 ## 运行
 
-1. `TCA9554_GPIO_GUI.exe` 和 `SvApiLibx64.dll` 放同一目录（本目录已带好这两个文件）。
+1. `TCA9554_GPIO_GUI.exe` 和 `SvApiLibx64.dll` 放同一目录
+   （`SvApiLibx64.dll` 已随仓库提供；exe 用 `sh build_win32.sh` 或 `build_win32.bat` 编译）。
 2. 确保厂商驱动 `SvIoCtrlx64.sys` 已安装。
 3. 双击运行（程序清单要求管理员权限，会自动弹 UAC）。
 
