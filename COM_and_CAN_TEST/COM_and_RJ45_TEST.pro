@@ -1,6 +1,5 @@
 QT       += core gui
 QT       += serialport
-QT       += network
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
@@ -18,8 +17,7 @@ DEFINES += QT_DEPRECATED_WARNINGS
 SOURCES += \
     main.cpp \
     mainwindow.cpp \
-    libucan2/LibUcan2Loader.cpp \
-    rawudpsocket.cpp
+    libucan2/LibUcan2Loader.cpp
 
 HEADERS += \
     cx/ChuangXinCan.h \      # 创芯动态加载头文件（必须）
@@ -27,8 +25,7 @@ HEADERS += \
     libucan2/api.h \         # 同星头文件
     libucan2/LibUcan2Loader.h \
     libpathhelper.h \
-    mainwindow.h \
-    rawudpsocket.h
+    mainwindow.h
 
 # 删除或注释掉以下重复/无用的：
 # cx/CanLoader.h \
@@ -51,10 +48,6 @@ unix:!android {
     LIBS += -lusb-1.0
 }
 
-# Winsock（rawudpsocket 在 Windows 上需要）
-win32 {
-    LIBS += -lws2_32
-}
 # LIBS += -L$$PWD/cx -lControlCAN    # 保持屏蔽
 # LIBS += -L$$PWD/zy -lControlCAN    # 保持屏蔽
 

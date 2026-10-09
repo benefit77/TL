@@ -36,11 +36,6 @@
 #include <cstdlib>
 #include <cmath>
 
-// 网络测试
-#include "rawudpsocket.h"
-#include <QUdpSocket>
-#include <QNetworkInterface>
-
 // 同星驱动头文件（动态加载，LibUcan2Loader 内部包含 api.h）
 #include "libucan2/LibUcan2Loader.h"
 
@@ -84,18 +79,6 @@ struct CanTestRow {
     QString ifaceName;
     QPushButton *btnTest;
     QLineEdit *display;
-};
-
-// 网络测试行结构
-struct NetTestRow {
-    QString ifaceName;
-    QString ipAddress;
-    QPushButton *btnTest;           // 连通测试按钮
-    QPushButton *btnBwTest;         // 带宽测试按钮
-    QLineEdit *display;             // 连通测试结果
-    QLineEdit *latencyDisplay;      // 隐藏的延迟值
-    QLineEdit *bwDisplay;           // 带宽测试结果
-    QLineEdit *targetIpInput;       // 每行独立的目标IP
 };
 
 // 串口测试状态机
@@ -153,18 +136,6 @@ private slots:
     void autoConfigCanInterface(const QString &ifaceName, int bitrate);
     void performCanHandshake(const QString &ifaceName, QLineEdit *display);
 
-    // 网络测试
-    void onNetTestButtonClicked();
-    void onNetBwTestButtonClicked();
-    void performNetHandshake(const QString &ifaceName, const QString &srcIp,
-                             const QString &targetIp, quint16 targetPort,
-                             QLineEdit *display, QLineEdit *latencyDisplay);
-    void performNetBwTest(const QString &ifaceName, const QString &targetIp,
-                          quint16 targetPort, QLineEdit *bwDisplay);
-    QStringList getAvailableNetInterfaces();
-    void initDynamicNetTests();
-    void onNetScanClicked();
-
 private:
     Ui::MainWindow *ui;
     QSerialPort *serial = nullptr;
@@ -177,9 +148,6 @@ private:
     QList<CanTestRow> m_canRows;
     u32 portCountLeft = 0;
     u32 portCountRight = 0;
-
-    // 网络测试
-    QList<NetTestRow> m_netRows;
 
     // 创芯动态加载
     ChuangXinCanAdapter *cxCan = nullptr;
