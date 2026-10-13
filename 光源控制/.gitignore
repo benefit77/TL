@@ -1,0 +1,13 @@
+# 编译产物不入库（与仓库根 .gitignore 的原则一致：只放源码）
+# 别人 clone 之后在本目录跑 ./编译.sh 就会生成下面这些
+
+build/
+build-new/
+
+# 根目录的可执行文件（没有扩展名，根 .gitignore 的 *.exe 拦不住）
+libledim-gui
+libledim-clidemo
+
+# 带版本号的库文件名，根 .gitignore 的 *.so 只能拦住 libledim.so 本身
+libledim.so
+libledim.so.*
