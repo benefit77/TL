@@ -7,6 +7,7 @@
 #include <QDebug>
 #include <QCoreApplication>
 #include <QByteArray>
+#include <QList>
 #include <cstring>        // Linux 下 memcpy 需要这个
 #include "../libpathhelper.h"
 
@@ -40,6 +41,18 @@ namespace ZhiYuan {
         unsigned char Mode;
     };
 
+    struct VCI_BOARD_INFO {
+        unsigned short hw_Version;
+        unsigned short fw_Version;
+        unsigned short dr_Version;
+        unsigned short in_Version;
+        unsigned short irq_Num;
+        unsigned char can_Num;
+        char str_Serial_Num[20];
+        char str_hw_Type[40];
+        unsigned short Reserved[4];
+    };
+
     typedef unsigned int (__stdcall *OpenDeviceFunc)(unsigned int, unsigned int, unsigned int);
     typedef unsigned int (__stdcall *CloseDeviceFunc)(unsigned int, unsigned int);
     typedef unsigned int (__stdcall *InitCANFunc)(unsigned int, unsigned int, unsigned int, VCI_INIT_CONFIG*);
@@ -48,6 +61,8 @@ namespace ZhiYuan {
     typedef unsigned int (__stdcall *ReceiveFunc)(unsigned int, unsigned int, unsigned int, VCI_CAN_OBJ*, unsigned int, int);
     typedef unsigned int (__stdcall *ClearBufferFunc)(unsigned int, unsigned int, unsigned int);
     typedef unsigned int (__stdcall *GetReceiveNumFunc)(unsigned int, unsigned int, unsigned int);
+    typedef unsigned int (__stdcall *ReadBoardInfoFunc)(unsigned int, unsigned int, VCI_BOARD_INFO*);
+    typedef unsigned int (__stdcall *FindUsbDevice2Func)(VCI_BOARD_INFO*);
 }
 
 class ZhiYuanCanAdapter : public QObject {
@@ -96,6 +111,8 @@ public:
         m_recv = (ZhiYuan::ReceiveFunc)m_lib->resolve("VCI_Receive");
         m_clear = (ZhiYuan::ClearBufferFunc)m_lib->resolve("VCI_ClearBuffer");
         m_getNum = (ZhiYuan::GetReceiveNumFunc)m_lib->resolve("VCI_GetReceiveNum");
+        m_readInfo = (ZhiYuan::ReadBoardInfoFunc)m_lib->resolve("VCI_ReadBoardInfo");
+        m_findUsbDevice2 = (ZhiYuan::FindUsbDevice2Func)m_lib->resolve("VCI_FindUsbDevice2");
 
         if (!m_open || !m_send || !m_recv) {
             qDebug() << "致远关键函数解析失败: open=" << (m_open != nullptr)
@@ -179,6 +196,22 @@ public:
         return m_getNum ? m_getNum(type, devIdx, canIdx) : 0;
     }
 
+    bool readBoardInfo(unsigned int type, unsigned int devIdx, ZhiYuan::VCI_BOARD_INFO *info) {
+        return m_readInfo ? (m_readInfo(type, devIdx, info) == 1) : false;
+    }
+
+    unsigned int findUsbDevices(QList<ZhiYuan::VCI_BOARD_INFO> &devices) {
+        devices.clear();
+        if (!m_findUsbDevice2) return 0;
+
+        ZhiYuan::VCI_BOARD_INFO infos[64] = {};
+        const unsigned int count = qMin<unsigned int>(m_findUsbDevice2(infos), 64);
+        for (unsigned int i = 0; i < count; ++i) {
+            devices.append(infos[i]);
+        }
+        return count;
+    }
+
 private:
     QLibrary *m_lib;
     ZhiYuan::OpenDeviceFunc m_open = nullptr;
@@ -189,6 +222,8 @@ private:
     ZhiYuan::ReceiveFunc m_recv = nullptr;
     ZhiYuan::ClearBufferFunc m_clear = nullptr;
     ZhiYuan::GetReceiveNumFunc m_getNum = nullptr;
+    ZhiYuan::ReadBoardInfoFunc m_readInfo = nullptr;
+    ZhiYuan::FindUsbDevice2Func m_findUsbDevice2 = nullptr;
 };
 
 #endif

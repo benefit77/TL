@@ -6,6 +6,7 @@
 #include <QDebug>
 #include <QCoreApplication>
 #include <QByteArray>
+#include <QList>
 #include <QObject>
 #include <cstring>
 #include "../libpathhelper.h"
@@ -64,6 +65,7 @@ namespace ChuangXin {
     typedef unsigned int (__stdcall *ClearBufferFunc)(unsigned int, unsigned int, unsigned int);
     typedef unsigned int (__stdcall *GetReceiveNumFunc)(unsigned int, unsigned int, unsigned int);
     typedef unsigned int (__stdcall *ReadBoardInfoFunc)(unsigned int, unsigned int, VCI_BOARD_INFO*);
+    typedef unsigned int (__stdcall *FindUsbDevice2Func)(VCI_BOARD_INFO*);
 }
 
 class ChuangXinCanAdapter : public QObject {
@@ -112,6 +114,7 @@ public:
         m_clear = (ChuangXin::ClearBufferFunc)m_lib->resolve("VCI_ClearBuffer");
         m_getNum = (ChuangXin::GetReceiveNumFunc)m_lib->resolve("VCI_GetReceiveNum");
         m_readInfo = (ChuangXin::ReadBoardInfoFunc)m_lib->resolve("VCI_ReadBoardInfo");
+        m_findUsbDevice2 = (ChuangXin::FindUsbDevice2Func)m_lib->resolve("VCI_FindUsbDevice2");
 
         if (!m_open || !m_send || !m_recv) {
             qDebug() << "创芯关键函数解析失败";
@@ -200,6 +203,20 @@ public:
         return m_readInfo ? (m_readInfo(devType, devIndex, info) == 1) : false;
     }
 
+    // VCI_FindUsbDevice2 是 ControlCAN 的可选接口。旧版 Linux 驱动可能没有
+    // 导出它，此时调用方仍可通过依次尝试 DeviceInd 来枚举设备。
+    unsigned int findUsbDevices(QList<ChuangXin::VCI_BOARD_INFO> &devices) {
+        devices.clear();
+        if (!m_findUsbDevice2) return 0;
+
+        ChuangXin::VCI_BOARD_INFO infos[64] = {};
+        const unsigned int count = qMin<unsigned int>(m_findUsbDevice2(infos), 64);
+        for (unsigned int i = 0; i < count; ++i) {
+            devices.append(infos[i]);
+        }
+        return count;
+    }
+
 private:
     QLibrary *m_lib;
     ChuangXin::OpenDeviceFunc m_open = nullptr;
@@ -212,6 +229,7 @@ private:
     ChuangXin::ClearBufferFunc m_clear = nullptr;
     ChuangXin::GetReceiveNumFunc m_getNum = nullptr;
     ChuangXin::ReadBoardInfoFunc m_readInfo = nullptr;
+    ChuangXin::FindUsbDevice2Func m_findUsbDevice2 = nullptr;
 };
 
 #endif

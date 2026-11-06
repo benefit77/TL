@@ -73,121 +73,257 @@ void MainWindow::initCAN()
 void MainWindow::initHardwareCan()
 {
     const unsigned int nDeviceType = 4;
-    const unsigned int nDeviceInd = 0;
-    const unsigned int nCANInd = g_cfg.ucan2_channel - 1;
+    const unsigned int maxDevices = 16;
+    const unsigned int maxChannelsPerDevice = 8;
 
-    bool initSuccess = false;
-
-    // 清理已有资源
-    if (cxCan) {
-        cxCan->closeDevice(cxDevType, cxDevIndex);
-        delete cxCan;
-        cxCan = nullptr;
-    }
-    if (zyCan) {
-        zyCan->closeDevice(4, 0);
-        delete zyCan;
-        zyCan = nullptr;
-    }
-    can_modu_name = NONE;
+    closeHardwareCanDevices();
 
     // ========== 1. 尝试 TL_MCANFD（同星）- 动态加载 ==========
     if (LibUcan2Loader::load()) {
         qDebug() << "TL-CANFD 动态库加载成功";
         if (LibUcan2Loader::Init()) {
+            tlInitialized = true;
             qDebug() << "TL-CANFD OPEN DEV SUCC";
-            LibUcan2Loader::EndisChannel(g_cfg.ucan2_channel, false);
-            LibUcan2Loader::EndisChannel(g_cfg.ucan2_channel + 1, false);
-            if (LibUcan2Loader::InitChannel(g_cfg.ucan2_channel, true, g_cfg.baud_rate, g_cfg.baud_data) &&
-                    LibUcan2Loader::InitChannel(g_cfg.ucan2_channel + 1, true, g_cfg.baud_rate, g_cfg.baud_data)) {
-                qDebug() << "TL-CANFD init SUCC";
-                if (LibUcan2Loader::EndisChannel(g_cfg.ucan2_channel, true) &&
-                        LibUcan2Loader::EndisChannel(g_cfg.ucan2_channel + 1, true)) {
-                    qDebug() << "TL-CANFD OPEN CHANNEL SUCC";
-                    can_modu_name = TL_MCANFD;
-                    initSuccess = true;
+
+            // libucan2 通过全局通道序号访问通道，不提供独立 DeviceInd。
+            // 逐个探测通道，这样第二台及后续设备不会被固定通道 1/2 隐藏。
+            for (unsigned int channel = 1; channel <= 32; ++channel) {
+                LibUcan2Loader::EndisChannel(static_cast<uint8_t>(channel), false);
+                if (!LibUcan2Loader::InitChannel(static_cast<uint8_t>(channel), true,
+                                                g_cfg.baud_rate, g_cfg.baud_data)) {
+                    continue;
                 }
+                if (!LibUcan2Loader::EndisChannel(static_cast<uint8_t>(channel), true)) {
+                    continue;
+                }
+
+                const unsigned int deviceNo = (channel - 1) / 2 + 1;
+                const unsigned int canNo = (channel - 1) % 2 + 1;
+                CanHardwareChannel hwChannel;
+                hwChannel.module = TL_MCANFD;
+                hwChannel.deviceIndex = deviceNo - 1;
+                hwChannel.channelIndex = channel;
+                hwChannel.displayName = QString("设备%1-CAN%2").arg(deviceNo).arg(canNo);
+                m_hardwareChannels.append(hwChannel);
             }
+
+            if (!m_hardwareChannels.isEmpty()) {
+                can_modu_name = TL_MCANFD;
+                qDebug() << "TL-CANFD 初始化通道数:" << m_hardwareChannels.size();
+                initDynamicCanTests();
+                return;
+            }
+            qDebug() << "TL-CANFD 未找到可用通道";
+            LibUcan2Loader::Deinit();
+            tlInitialized = false;
         } else {
             qDebug() << "TL-CANFD Init() 失败 - USB设备未连接或权限不足";
         }
+        LibUcan2Loader::unload();
     } else {
         qDebug() << "TL-CANFD 动态库加载失败";
     }
 
     // ========== 2. 尝试创芯 CX_USBCAN（动态加载）==========
-    if (!initSuccess) {
-        cxCan = new ChuangXinCanAdapter(this);
-        if (cxCan->load()) {
-            cxDevType = nDeviceType;
-            cxDevIndex = nDeviceInd;
-            if (cxCan->openDevice(cxDevType, cxDevIndex)) {
-                bool ch0_ok = cxCan->initCAN(cxDevType, cxDevIndex, 0, g_cfg.baud_rate / 1000) &&
-                        cxCan->startCAN(cxDevType, cxDevIndex, 0);
-                bool ch1_ok = cxCan->initCAN(cxDevType, cxDevIndex, 1, g_cfg.baud_rate / 1000) &&
-                        cxCan->startCAN(cxDevType, cxDevIndex, 1);
-                if (ch0_ok && ch1_ok) {
-                    cxCanIndex = nCANInd;
-                    can_modu_name = CX_USBCAN;
-                    initSuccess = true;
-                    qDebug() << "创芯CAN初始化成功";
-                } else {
-                    qDebug() << "创芯通道初始化失败";
-                    cxCan->closeDevice(cxDevType, cxDevIndex);
-                    delete cxCan;
-                    cxCan = nullptr;
-                }
-            } else {
-                qDebug() << "创芯OpenDevice失败";
-                delete cxCan;
-                cxCan = nullptr;
+    cxCan = new ChuangXinCanAdapter(this);
+    if (cxCan->load()) {
+        cxDevType = nDeviceType;
+
+        QList<ChuangXin::VCI_BOARD_INFO> boardInfos;
+        const unsigned int foundCount = qMin(cxCan->findUsbDevices(boardInfos), maxDevices);
+        qDebug() << "创芯驱动枚举设备数:" << foundCount;
+        const bool probingDevices = (foundCount == 0);
+
+        QList<unsigned int> candidates;
+        if (foundCount > 0) {
+            for (unsigned int i = 0; i < foundCount; ++i) {
+                candidates.append(i);
             }
         } else {
-            delete cxCan;
-            cxCan = nullptr;
+            // 部分 Linux ControlCAN 版本没有导出 VCI_FindUsbDevice2。
+            // 依次打开 DeviceInd 是这些版本的兼容枚举方式。
+            for (unsigned int i = 0; i < maxDevices; ++i) {
+                candidates.append(i);
+            }
         }
+
+        for (unsigned int deviceIndex : candidates) {
+            if (!cxCan->openDevice(cxDevType, deviceIndex)) {
+                qDebug() << "创芯OpenDevice失败: DeviceInd=" << deviceIndex;
+                if (probingDevices) break;
+                continue;
+            }
+
+            ChuangXin::VCI_BOARD_INFO boardInfo = {};
+            const bool hasBoardInfo = cxCan->readBoardInfo(cxDevType, deviceIndex, &boardInfo);
+            unsigned int channelCount = 2;
+            if (hasBoardInfo && boardInfo.can_Num > 0) {
+                channelCount = qMin<unsigned int>(boardInfo.can_Num, maxChannelsPerDevice);
+            }
+
+            bool foundChannel = false;
+            for (unsigned int canIndex = 0; canIndex < channelCount; ++canIndex) {
+                if (!cxCan->initCAN(cxDevType, deviceIndex, canIndex, g_cfg.baud_rate / 1000)) {
+                    qDebug() << "创芯通道初始化失败: DeviceInd=" << deviceIndex
+                             << "CANInd=" << canIndex;
+                    continue;
+                }
+                if (!cxCan->startCAN(cxDevType, deviceIndex, canIndex)) {
+                    qDebug() << "创芯通道启动失败: DeviceInd=" << deviceIndex
+                             << "CANInd=" << canIndex;
+                    continue;
+                }
+
+                CanHardwareChannel hwChannel;
+                hwChannel.module = CX_USBCAN;
+                hwChannel.deviceIndex = deviceIndex;
+                hwChannel.channelIndex = canIndex;
+                hwChannel.displayName = QString("设备%1-CAN%2")
+                        .arg(deviceIndex + 1).arg(canIndex + 1);
+                m_hardwareChannels.append(hwChannel);
+                foundChannel = true;
+            }
+
+            if (foundChannel) {
+                cxOpenedDevices.append(deviceIndex);
+                qDebug() << "创芯CAN设备初始化成功: DeviceInd=" << deviceIndex
+                         << "通道数=" << channelCount;
+            } else {
+                cxCan->closeDevice(cxDevType, deviceIndex);
+            }
+        }
+
+        if (!m_hardwareChannels.isEmpty()) {
+            can_modu_name = CX_USBCAN;
+            qDebug() << "创芯CAN初始化成功，设备数:" << cxOpenedDevices.size()
+                     << "通道数:" << m_hardwareChannels.size();
+            initDynamicCanTests();
+            return;
+        }
+
+        delete cxCan;
+        cxCan = nullptr;
+    } else {
+        delete cxCan;
+        cxCan = nullptr;
     }
 
     // ========== 3. 尝试致远 ZY_USBCAN（动态加载）==========
-    if (!initSuccess) {
-        zyCan = new ZhiYuanCanAdapter(this);
-        if (zyCan->load()) {
-            unsigned int zyDevType = 4;
-            unsigned int zyDevIndex = 0;
-            if (zyCan->openDevice(zyDevType, zyDevIndex)) {
-                bool ch0_ok = zyCan->initCAN(zyDevType, zyDevIndex, 0, g_cfg.baud_rate / 1000) &&
-                        zyCan->startCAN(zyDevType, zyDevIndex, 0);
-                bool ch1_ok = zyCan->initCAN(zyDevType, zyDevIndex, 1, g_cfg.baud_rate / 1000) &&
-                        zyCan->startCAN(zyDevType, zyDevIndex, 1);
-                if (ch0_ok && ch1_ok) {
-                    zyCanIndex = nCANInd;
-                    can_modu_name = ZY_USBCAN;
-                    initSuccess = true;
-                    qDebug() << "致远CAN初始化成功";
-                } else {
-                    zyCan->closeDevice(zyDevType, zyDevIndex);
-                    delete zyCan;
-                    zyCan = nullptr;
-                }
-            } else {
-                delete zyCan;
-                zyCan = nullptr;
+    zyCan = new ZhiYuanCanAdapter(this);
+    if (zyCan->load()) {
+        zyDevType = nDeviceType;
+
+        QList<ZhiYuan::VCI_BOARD_INFO> boardInfos;
+        const unsigned int foundCount = qMin(zyCan->findUsbDevices(boardInfos), maxDevices);
+        qDebug() << "致远驱动枚举设备数:" << foundCount;
+        const bool probingDevices = (foundCount == 0);
+
+        QList<unsigned int> candidates;
+        if (foundCount > 0) {
+            for (unsigned int i = 0; i < foundCount; ++i) {
+                candidates.append(i);
             }
         } else {
-            delete zyCan;
-            zyCan = nullptr;
+            for (unsigned int i = 0; i < maxDevices; ++i) {
+                candidates.append(i);
+            }
         }
+
+        for (unsigned int deviceIndex : candidates) {
+            if (!zyCan->openDevice(zyDevType, deviceIndex)) {
+                qDebug() << "致远OpenDevice失败: DeviceInd=" << deviceIndex;
+                if (probingDevices) break;
+                continue;
+            }
+
+            ZhiYuan::VCI_BOARD_INFO boardInfo = {};
+            const bool hasBoardInfo = zyCan->readBoardInfo(zyDevType, deviceIndex, &boardInfo);
+            unsigned int channelCount = 2;
+            if (hasBoardInfo && boardInfo.can_Num > 0) {
+                channelCount = qMin<unsigned int>(boardInfo.can_Num, maxChannelsPerDevice);
+            }
+
+            bool foundChannel = false;
+            for (unsigned int canIndex = 0; canIndex < channelCount; ++canIndex) {
+                if (!zyCan->initCAN(zyDevType, deviceIndex, canIndex, g_cfg.baud_rate / 1000)) {
+                    qDebug() << "致远通道初始化失败: DeviceInd=" << deviceIndex
+                             << "CANInd=" << canIndex;
+                    continue;
+                }
+                if (!zyCan->startCAN(zyDevType, deviceIndex, canIndex)) {
+                    qDebug() << "致远通道启动失败: DeviceInd=" << deviceIndex
+                             << "CANInd=" << canIndex;
+                    continue;
+                }
+
+                CanHardwareChannel hwChannel;
+                hwChannel.module = ZY_USBCAN;
+                hwChannel.deviceIndex = deviceIndex;
+                hwChannel.channelIndex = canIndex;
+                hwChannel.displayName = QString("设备%1-CAN%2")
+                        .arg(deviceIndex + 1).arg(canIndex + 1);
+                m_hardwareChannels.append(hwChannel);
+                foundChannel = true;
+            }
+
+            if (foundChannel) {
+                zyOpenedDevices.append(deviceIndex);
+                qDebug() << "致远CAN设备初始化成功: DeviceInd=" << deviceIndex
+                         << "通道数=" << channelCount;
+            } else {
+                zyCan->closeDevice(zyDevType, deviceIndex);
+            }
+        }
+
+        if (!m_hardwareChannels.isEmpty()) {
+            can_modu_name = ZY_USBCAN;
+            qDebug() << "致远CAN初始化成功，设备数:" << zyOpenedDevices.size()
+                     << "通道数:" << m_hardwareChannels.size();
+            initDynamicCanTests();
+            return;
+        }
+
+        delete zyCan;
+        zyCan = nullptr;
+    } else {
+        delete zyCan;
+        zyCan = nullptr;
     }
 
     // ========== 结果处理 ==========
-    if (!initSuccess) {
-        qCritical() << "所有 CAN 设备初始化失败";
-        can_modu_name = NONE;
-        initDynamicCanTests();  // 仍创建 UI，显示"未检测到 CAN 接口"
-    } else {
-        qDebug() << "硬件 CAN 初始化成功，当前模块:" << can_modu_name;
-        initDynamicCanTests();  // 创建 UI，显示静态 CAN1/CAN2
+    qCritical() << "所有 CAN 设备初始化失败";
+    can_modu_name = NONE;
+    initDynamicCanTests();
+}
+
+void MainWindow::closeHardwareCanDevices()
+{
+    if (cxCan) {
+        for (unsigned int deviceIndex : cxOpenedDevices) {
+            cxCan->closeDevice(cxDevType, deviceIndex);
+        }
+        delete cxCan;
+        cxCan = nullptr;
     }
+    cxOpenedDevices.clear();
+
+    if (zyCan) {
+        for (unsigned int deviceIndex : zyOpenedDevices) {
+            zyCan->closeDevice(zyDevType, deviceIndex);
+        }
+        delete zyCan;
+        zyCan = nullptr;
+    }
+    zyOpenedDevices.clear();
+
+    if (tlInitialized) {
+        LibUcan2Loader::Deinit();
+        tlInitialized = false;
+    }
+    LibUcan2Loader::unload();
+
+    m_hardwareChannels.clear();
+    can_modu_name = NONE;
 }
 
 
@@ -215,25 +351,7 @@ MainWindow::MainWindow(QWidget *parent)
 
 MainWindow::~MainWindow()
 {
-    // CAN 清理
-    if(can_modu_name == TL_MCANFD) {
-        LibUcan2Loader::Deinit();
-        LibUcan2Loader::unload();
-    }
-    else if(can_modu_name == CX_USBCAN) {
-        if (cxCan) {
-            cxCan->closeDevice(cxDevType, cxDevIndex);
-            delete cxCan;
-            cxCan = nullptr;
-        }
-    }
-    else if(can_modu_name == ZY_USBCAN) {
-        if (zyCan) {
-            zyCan->closeDevice(4, 0);
-            delete zyCan;
-            zyCan = nullptr;
-        }
-    }
+    closeHardwareCanDevices();
 
     delete ui;
 }
@@ -641,24 +759,40 @@ void MainWindow::initDynamicCanTests()
         delete oldLayout;
     }
 
-    // 确定 CAN 接口列表
-    QStringList ifaceList;
+    QList<CanTestRow> rows;
     if (can_modu_name == NONE) {
-        // SocketCAN 模式
-        ifaceList = getAvailableCanInterfaces();
+        for (const QString &iface : getAvailableCanInterfaces()) {
+            CanTestRow row;
+            row.ifaceName = iface;
+            row.btnTest = nullptr;
+            row.display = nullptr;
+            row.module = NONE;
+            row.deviceIndex = 0;
+            row.channelIndex = 0;
+            rows.append(row);
+        }
     } else {
-        // 硬件 CAN 模式：创建 CAN1/CAN2
-        ifaceList << "CAN1" << "CAN2";
+        for (const CanHardwareChannel &hwChannel : m_hardwareChannels) {
+            CanTestRow row;
+            row.ifaceName = hwChannel.displayName;
+            row.btnTest = nullptr;
+            row.display = nullptr;
+            row.module = hwChannel.module;
+            row.deviceIndex = hwChannel.deviceIndex;
+            row.channelIndex = hwChannel.channelIndex;
+            rows.append(row);
+        }
     }
 
-    QHBoxLayout *mainLayout = new QHBoxLayout(canGroup);
-    mainLayout->setContentsMargins(15, 20, 15, 10);
-    mainLayout->setSpacing(30);
+    QGridLayout *mainLayout = new QGridLayout(canGroup);
+    mainLayout->setContentsMargins(10, 18, 10, 8);
+    mainLayout->setHorizontalSpacing(12);
+    mainLayout->setVerticalSpacing(8);
 
-    if (ifaceList.isEmpty()) {
+    if (rows.isEmpty()) {
         QLabel *noCanLabel = new QLabel("⚠️ 未检测到可用的 CAN 接口");
         noCanLabel->setStyleSheet("color: #E53935; font-weight: bold; font-size: 14px;");
-        mainLayout->addWidget(noCanLabel, 0, Qt::AlignLeft);
+        mainLayout->addWidget(noCanLabel, 0, 0, 1, 2, Qt::AlignLeft);
         return;
     }
 
@@ -671,33 +805,54 @@ void MainWindow::initDynamicCanTests()
 
     m_canRows.clear();
 
-    for (int i = 0; i < ifaceList.size(); ++i) {
-        QString iface = ifaceList.at(i);
+    for (int i = 0; i < rows.size(); ++i) {
+        CanTestRow &row = rows[i];
 
-        QPushButton *btnTest = new QPushButton(QString("%1 测试").arg(iface));
-        btnTest->setFixedSize(100, 30);
+        QPushButton *btnTest = new QPushButton(QString("%1 测试").arg(row.ifaceName));
+        btnTest->setFixedSize(120, 30);
         btnTest->setCursor(Qt::PointingHandCursor);
+        btnTest->setToolTip(QString("驱动=%1，DeviceInd=%2，CANInd=%3")
+                            .arg(row.module == TL_MCANFD ? "TL-MCANFD" :
+                                 row.module == CX_USBCAN ? "CX_USBCAN" :
+                                 row.module == ZY_USBCAN ? "ZY_USBCAN" : "SocketCAN")
+                            .arg(row.deviceIndex)
+                            .arg(row.channelIndex));
 
         QLineEdit *statusDisplay = new QLineEdit();
         statusDisplay->setReadOnly(true);
-        statusDisplay->setFixedSize(160, 30);
+        statusDisplay->setFixedSize(150, 30);
         statusDisplay->setStyleSheet(defaultStatusStyle);
         statusDisplay->setAlignment(Qt::AlignCenter);
         statusDisplay->setText("等待测试...");
 
-        QHBoxLayout *blockLayout = new QHBoxLayout();
+        QWidget *block = new QWidget(canGroup);
+        QHBoxLayout *blockLayout = new QHBoxLayout(block);
+        blockLayout->setContentsMargins(0, 0, 0, 0);
         blockLayout->setSpacing(8);
         blockLayout->addWidget(btnTest);
         blockLayout->addWidget(statusDisplay);
-        mainLayout->addLayout(blockLayout);
+        mainLayout->addWidget(block, i / 2, i % 2);
 
-        CanTestRow row = {iface, btnTest, statusDisplay};
+        row.btnTest = btnTest;
+        row.display = statusDisplay;
         m_canRows.append(row);
 
         connect(btnTest, &QPushButton::clicked, this, &MainWindow::onCanTestButtonClicked);
     }
 
-    mainLayout->addStretch();
+    mainLayout->setColumnStretch(0, 1);
+    mainLayout->setColumnStretch(1, 1);
+
+    // 设备较多时自动增加 CAN 分组和窗口高度，避免控件被原来的固定高度裁掉。
+    const int rowCount = (rows.size() + 1) / 2;
+    const int requiredGroupHeight = 45 + rowCount * 38;
+    if (canGroup->height() < requiredGroupHeight) {
+        canGroup->resize(canGroup->width(), requiredGroupHeight);
+    }
+    const int requiredWindowHeight = canGroup->y() + requiredGroupHeight + 12;
+    if (height() < requiredWindowHeight) {
+        resize(width(), requiredWindowHeight);
+    }
 }
 
 // 自动配置 CAN 接口波特率并启用（仅 SocketCAN）
@@ -720,8 +875,10 @@ void MainWindow::autoConfigCanInterface(const QString &ifaceName, int bitrate)
 }
 
 // 执行 CAN 握手测试
-void MainWindow::performCanHandshake(const QString &ifaceName, QLineEdit *display)
+void MainWindow::performCanHandshake(const CanTestRow &testRow)
 {
+    const QString ifaceName = testRow.ifaceName;
+    QLineEdit *display = testRow.display;
     if (!display) return;
 
     constexpr uint32_t HANDSHAKE_ID_REQUEST = 0x100;
@@ -736,7 +893,7 @@ void MainWindow::performCanHandshake(const QString &ifaceName, QLineEdit *displa
     QCoreApplication::processEvents();
 
     // ===== SocketCAN 模式（系统 can0/can1 接口）=====
-    if (can_modu_name == NONE) {
+    if (testRow.module == NONE) {
         autoConfigCanInterface(ifaceName, 500000);
 
         display->setText(QString("正在打开接口 %1 ...").arg(ifaceName));
@@ -853,7 +1010,7 @@ void MainWindow::performCanHandshake(const QString &ifaceName, QLineEdit *displa
     }
 
     // ===== 硬件 CAN 模式（libucan2 / 创芯 / 致远）=====
-    int channel = (ifaceName == "CAN2") ? 2 : 1;
+    const uint8_t tlChannel = static_cast<uint8_t>(testRow.channelIndex);
 
     libucan2_CANFrame txFrame = {0};
     txFrame.MsgId = HANDSHAKE_ID_REQUEST;
@@ -866,34 +1023,38 @@ void MainWindow::performCanHandshake(const QString &ifaceName, QLineEdit *displa
     libucan2_CANFrame rxFrame = {0};
 
     auto sendFrame = [&](libucan2_CANFrame* frame) -> bool {
-        switch(can_modu_name) {
+        switch(testRow.module) {
         case TL_MCANFD:
-            return LibUcan2Loader::SendFrame(channel, frame);
+            return LibUcan2Loader::SendFrame(tlChannel, frame);
         case CX_USBCAN: {
             if (!cxCan) return false;
             QByteArray data((char*)frame->Data, frame->DataLength);
-            return cxCan->sendFrame(cxDevType, cxDevIndex, channel - 1,
+            return cxCan->sendFrame(cxDevType, testRow.deviceIndex, testRow.channelIndex,
                                     frame->MsgId, data,
                                     !frame->IsStdId, !frame->IsDataFrame);
         }
         case ZY_USBCAN: {
             if (!zyCan) return false;
             QByteArray data((char*)frame->Data, frame->DataLength);
-            return zyCan->sendFrame(4, 0, channel - 1, frame->MsgId, data,
+            return zyCan->sendFrame(zyDevType, testRow.deviceIndex, testRow.channelIndex,
+                                    frame->MsgId, data,
                                     !frame->IsStdId, !frame->IsDataFrame);
         }
+        case NONE:
+            break;
         }
         return false;
     };
 
     auto recvFrame = [&](libucan2_CANFrame* frame) -> bool {
-        switch(can_modu_name) {
+        switch(testRow.module) {
         case TL_MCANFD:
-            return LibUcan2Loader::RecvFrame(channel, frame);
+            return LibUcan2Loader::RecvFrame(tlChannel, frame);
         case CX_USBCAN: {
             if (!cxCan) return false;
             ChuangXin::VCI_CAN_OBJ vco;
-            int ret = cxCan->receive(cxDevType, cxDevIndex, channel - 1, &vco, 1, 0);
+            int ret = cxCan->receive(cxDevType, testRow.deviceIndex, testRow.channelIndex,
+                                     &vco, 1, 0);
             if (ret > 0) {
                 frame->MsgId = vco.ID;
                 frame->IsStdId = (vco.ExternFlag == 0);
@@ -907,7 +1068,8 @@ void MainWindow::performCanHandshake(const QString &ifaceName, QLineEdit *displa
         case ZY_USBCAN: {
             if (!zyCan) return false;
             ZhiYuan::VCI_CAN_OBJ vco;
-            int ret = zyCan->receive(4, 0, channel - 1, &vco, 1, 0);
+            int ret = zyCan->receive(zyDevType, testRow.deviceIndex, testRow.channelIndex,
+                                     &vco, 1, 0);
             if (ret > 0) {
                 frame->MsgId = vco.ID;
                 frame->IsStdId = (vco.ExternFlag == 0);
@@ -918,6 +1080,8 @@ void MainWindow::performCanHandshake(const QString &ifaceName, QLineEdit *displa
             }
             return false;
         }
+        case NONE:
+            break;
         }
         return false;
     };
@@ -977,18 +1141,11 @@ void MainWindow::onCanTestButtonClicked()
 
     clickedBtn->setEnabled(false);
 
-    QString targetIface;
-    QLineEdit *targetDisplay = nullptr;
     for (const CanTestRow &row : m_canRows) {
         if (row.btnTest == clickedBtn) {
-            targetIface = row.ifaceName;
-            targetDisplay = row.display;
+            performCanHandshake(row);
             break;
         }
-    }
-
-    if (targetDisplay) {
-        performCanHandshake(targetIface, targetDisplay);
     }
 
     clickedBtn->setEnabled(true);

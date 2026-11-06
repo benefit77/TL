@@ -27,6 +27,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLayout>
+#include <QGridLayout>
 
 
 
@@ -79,6 +80,18 @@ struct CanTestRow {
     QString ifaceName;
     QPushButton *btnTest;
     QLineEdit *display;
+    CAN_MODU_NAME module;
+    unsigned int deviceIndex;
+    unsigned int channelIndex;
+};
+
+// 一个可测试的硬件 CAN 通道。deviceIndex 对 ControlCAN 驱动是 DeviceInd，
+// channelIndex 对 ControlCAN 是 CANInd(0 开始)，对 libucan2 是通道序号(1 开始)。
+struct CanHardwareChannel {
+    CAN_MODU_NAME module;
+    unsigned int deviceIndex;
+    unsigned int channelIndex;
+    QString displayName;
 };
 
 // 串口测试状态机
@@ -103,6 +116,7 @@ public:
 private slots:
     void initCAN();
     void initHardwareCan();
+    void closeHardwareCanDevices();
     void Read_Data();
     void SerialPort_init(int port_num);
     void SerialPort_clear();
@@ -134,7 +148,7 @@ private slots:
     QStringList getAvailableCanInterfaces();
     void initDynamicCanTests();
     void autoConfigCanInterface(const QString &ifaceName, int bitrate);
-    void performCanHandshake(const QString &ifaceName, QLineEdit *display);
+    void performCanHandshake(const CanTestRow &testRow);
 
 private:
     Ui::MainWindow *ui;
@@ -146,20 +160,21 @@ private:
 
     // CAN 动态测试
     QList<CanTestRow> m_canRows;
+    QList<CanHardwareChannel> m_hardwareChannels;
     u32 portCountLeft = 0;
     u32 portCountRight = 0;
 
     // 创芯动态加载
     ChuangXinCanAdapter *cxCan = nullptr;
     unsigned int cxDevType = 4;      // USBCAN2 设备类型通常为 4
-    unsigned int cxDevIndex = 0;
-    unsigned int cxCanIndex = 0;
+    QList<unsigned int> cxOpenedDevices;
 
     // 致远动态加载
     ZhiYuanCanAdapter *zyCan = nullptr;
     unsigned int zyDevType = 4;      // 致远 USBCAN2 也可能为 4，但需确认
-    unsigned int zyDevIndex = 0;
-    unsigned int zyCanIndex = 0;
+    QList<unsigned int> zyOpenedDevices;
+
+    bool tlInitialized = false;
 
     // 同星驱动（静态链接）
     // Linux 下需要确认是否有对应库文件
