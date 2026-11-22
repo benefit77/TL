@@ -132,8 +132,8 @@ sudo udevadm trigger
 ```
 
 程序会枚举所有 `DeviceInd`，并遍历每台设备报告的 CAN 通道。插入多台
-USBCAN 后，CAN 测试区会分别显示 `设备1-CAN1`、`设备1-CAN2`、
-`设备2-CAN1` 等，点击任意一项只会对对应的物理设备和通道执行握手测试。
+双通道 USBCAN 后，CAN 测试区会连续显示 `CAN1`、`CAN2`、`CAN3`、
+`CAN4` 等，点击任意一项只会对对应的物理设备和通道执行握手测试。
 
 如果旧版 `libcontrolcan.so` 没有导出 `VCI_FindUsbDevice2`，程序会依次尝试
 `DeviceInd=0..15`，因此不依赖 `lsusb` 中设备显示的先后顺序。

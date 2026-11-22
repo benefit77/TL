@@ -97,13 +97,10 @@ void MainWindow::initHardwareCan()
                     continue;
                 }
 
-                const unsigned int deviceNo = (channel - 1) / 2 + 1;
-                const unsigned int canNo = (channel - 1) % 2 + 1;
                 CanHardwareChannel hwChannel;
                 hwChannel.module = TL_MCANFD;
-                hwChannel.deviceIndex = deviceNo - 1;
+                hwChannel.deviceIndex = (channel - 1) / 2;
                 hwChannel.channelIndex = channel;
-                hwChannel.displayName = QString("设备%1-CAN%2").arg(deviceNo).arg(canNo);
                 m_hardwareChannels.append(hwChannel);
             }
 
@@ -178,8 +175,6 @@ void MainWindow::initHardwareCan()
                 hwChannel.module = CX_USBCAN;
                 hwChannel.deviceIndex = deviceIndex;
                 hwChannel.channelIndex = canIndex;
-                hwChannel.displayName = QString("设备%1-CAN%2")
-                        .arg(deviceIndex + 1).arg(canIndex + 1);
                 m_hardwareChannels.append(hwChannel);
                 foundChannel = true;
             }
@@ -260,8 +255,6 @@ void MainWindow::initHardwareCan()
                 hwChannel.module = ZY_USBCAN;
                 hwChannel.deviceIndex = deviceIndex;
                 hwChannel.channelIndex = canIndex;
-                hwChannel.displayName = QString("设备%1-CAN%2")
-                        .arg(deviceIndex + 1).arg(canIndex + 1);
                 m_hardwareChannels.append(hwChannel);
                 foundChannel = true;
             }
@@ -772,9 +765,10 @@ void MainWindow::initDynamicCanTests()
             rows.append(row);
         }
     } else {
-        for (const CanHardwareChannel &hwChannel : m_hardwareChannels) {
+        for (int i = 0; i < m_hardwareChannels.size(); ++i) {
+            const CanHardwareChannel &hwChannel = m_hardwareChannels.at(i);
             CanTestRow row;
-            row.ifaceName = hwChannel.displayName;
+            row.ifaceName = QString("CAN%1").arg(i + 1);
             row.btnTest = nullptr;
             row.display = nullptr;
             row.module = hwChannel.module;

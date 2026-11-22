@@ -91,7 +91,6 @@ struct CanHardwareChannel {
     CAN_MODU_NAME module;
     unsigned int deviceIndex;
     unsigned int channelIndex;
-    QString displayName;
 };
 
 // 串口测试状态机
